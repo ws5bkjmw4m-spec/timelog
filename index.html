@@ -1,0 +1,375 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="時間記錄">
+<title>時間記錄</title>
+<style>
+  :root {
+    --bg: #f4f5f7;
+    --card: #ffffff;
+    --text: #1c1c1e;
+    --sub: #8e8e93;
+    --accent: #007aff;
+    --green: #34c759;
+    --red: #ff3b30;
+    --border: #e5e5ea;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body {
+    margin: 0;
+    font-family: -apple-system, "PingFang TC", "Helvetica Neue", sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    padding: env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 24px);
+  }
+  h1 {
+    font-size: 22px;
+    margin: 16px 4px 12px;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  h1 .date { font-size: 14px; color: var(--sub); font-weight: 400; }
+  .card {
+    background: var(--card);
+    border-radius: 14px;
+    padding: 16px;
+    margin-bottom: 14px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+  }
+  label { font-size: 13px; color: var(--sub); display: block; margin-bottom: 6px; }
+  input[type=text], textarea {
+    width: 100%;
+    font-size: 17px;
+    padding: 12px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--bg);
+    margin-bottom: 12px;
+    font-family: inherit;
+  }
+  textarea { resize: none; height: 64px; }
+  input:focus, textarea:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  .btn {
+    width: 100%;
+    font-size: 18px;
+    font-weight: 600;
+    padding: 15px;
+    border: none;
+    border-radius: 12px;
+    color: #fff;
+    font-family: inherit;
+  }
+  .btn:active { opacity: 0.75; }
+  .btn-start { background: var(--green); }
+  .btn-end   { background: var(--red); }
+  .btn-export { background: var(--accent); margin-top: 4px; }
+  .btn:disabled { background: #c7c7cc; }
+  .running {
+    text-align: center;
+    padding: 10px 0 14px;
+  }
+  .running .task { font-size: 20px; font-weight: 700; }
+  .running .since { font-size: 14px; color: var(--sub); margin-top: 4px; }
+  .running .elapsed { font-size: 34px; font-weight: 700; font-variant-numeric: tabular-nums; margin-top: 6px; color: var(--green); }
+  /* 記錄列表 */
+  .entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    gap: 8px;
+  }
+  .entry:last-child { border-bottom: none; }
+  .entry .name { font-weight: 600; font-size: 16px; }
+  .entry .note { font-size: 13px; color: var(--sub); margin-top: 3px; word-break: break-all; }
+  .entry .time { font-size: 15px; font-variant-numeric: tabular-nums; white-space: nowrap; color: var(--accent); }
+  .entry .del {
+    border: none; background: none; color: var(--red);
+    font-size: 18px; padding: 2px 6px; font-family: inherit;
+  }
+  .empty { text-align: center; color: var(--sub); font-size: 14px; padding: 12px 0; }
+  h2 { font-size: 16px; margin: 4px 4px 8px; }
+  /* 輸出表格 */
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { border: 1px solid var(--border); padding: 8px 6px; text-align: left; vertical-align: top; }
+  th { background: var(--bg); font-size: 13px; }
+  td.t { white-space: nowrap; font-variant-numeric: tabular-nums; }
+  #exportArea { display: none; }
+  .toolbar { display: flex; gap: 10px; margin-top: 12px; }
+  .toolbar button {
+    flex: 1; font-size: 15px; padding: 12px; border-radius: 10px;
+    border: 1px solid var(--accent); background: #fff; color: var(--accent);
+    font-weight: 600; font-family: inherit;
+  }
+  .toolbar button:active { background: var(--bg); }
+  .toast {
+    position: fixed; left: 50%; bottom: 40px; transform: translateX(-50%);
+    background: rgba(28,28,30,0.9); color: #fff; padding: 10px 20px;
+    border-radius: 20px; font-size: 14px; opacity: 0; transition: opacity .3s;
+    pointer-events: none; white-space: nowrap;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<h1>時間記錄 <span class="date" id="todayLabel"></span></h1>
+
+<!-- 輸入區 -->
+<div class="card" id="inputCard">
+  <div id="idleView">
+    <label>正在做的事情</label>
+    <input type="text" id="taskInput" placeholder="例如：開會、讀書、運動…">
+    <label>備註（可留空）</label>
+    <textarea id="noteInput" placeholder="想補充的內容…"></textarea>
+    <button class="btn btn-start" id="startBtn">▶ 開始</button>
+  </div>
+  <div id="runningView" style="display:none">
+    <div class="running">
+      <div class="task" id="runningTask"></div>
+      <div class="since" id="runningSince"></div>
+      <div class="elapsed" id="elapsed">00:00</div>
+    </div>
+    <label>備註（可隨時修改）</label>
+    <textarea id="noteInputRunning"></textarea>
+    <button class="btn btn-end" id="endBtn">■ 結束</button>
+  </div>
+</div>
+
+<!-- 今日記錄 -->
+<h2>今日記錄</h2>
+<div class="card" id="listCard">
+  <div class="empty" id="emptyMsg">尚無記錄，按「開始」記錄第一件事吧！</div>
+  <div id="entryList"></div>
+</div>
+
+<button class="btn btn-export" id="exportBtn">📋 一鍵輸出今日記錄</button>
+
+<!-- 輸出區 -->
+<div class="card" id="exportArea">
+  <h2 id="exportTitle" style="margin:0 0 10px"></h2>
+  <table id="exportTable">
+    <thead>
+      <tr><th>事件</th><th>開始</th><th>結束</th><th>備註</th></tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+  <div class="toolbar">
+    <button id="copyBtn">複製文字</button>
+    <button id="shareBtn">分享</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  var KEY = 'timeLogEntries';
+  var CUR = 'timeLogCurrent';
+
+  function load(k){ try { return JSON.parse(localStorage.getItem(k)) } catch(e){ return null } }
+  function save(k,v){ localStorage.setItem(k, JSON.stringify(v)) }
+
+  function todayStr(d){
+    d = d || new Date();
+    return d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
+  }
+  function hm(ts){
+    var d = new Date(ts);
+    return String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+  }
+
+  var entries = load(KEY) || [];   // {date, task, note, start, end}
+  var current = load(CUR);         // {task, note, start} 或 null
+  var timer = null;
+
+  // DOM
+  var $ = function(id){ return document.getElementById(id) };
+  var idleView = $('idleView'), runningView = $('runningView');
+  var taskInput = $('taskInput'), noteInput = $('noteInput'), noteInputRunning = $('noteInputRunning');
+  var entryList = $('entryList'), emptyMsg = $('emptyMsg');
+  var exportArea = $('exportArea');
+
+  $('todayLabel').textContent = todayStr();
+
+  function showToast(msg){
+    var t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    setTimeout(function(){ t.classList.remove('show') }, 1800);
+  }
+
+  function todayEntries(){
+    var t = todayStr();
+    return entries.filter(function(e){ return e.date === t });
+  }
+
+  function renderList(){
+    var list = todayEntries();
+    emptyMsg.style.display = list.length ? 'none' : 'block';
+    entryList.innerHTML = '';
+    list.slice().reverse().forEach(function(e){
+      var div = document.createElement('div');
+      div.className = 'entry';
+      var left = document.createElement('div');
+      left.style.flex = '1';
+      var name = document.createElement('div');
+      name.className = 'name';
+      name.textContent = e.task;
+      left.appendChild(name);
+      if (e.note) {
+        var note = document.createElement('div');
+        note.className = 'note';
+        note.textContent = e.note;
+        left.appendChild(note);
+      }
+      var time = document.createElement('div');
+      time.className = 'time';
+      time.textContent = hm(e.start) + '–' + hm(e.end);
+      var del = document.createElement('button');
+      del.className = 'del';
+      del.textContent = '✕';
+      del.onclick = function(){
+        if (confirm('刪除「' + e.task + '」這筆記錄？')) {
+          entries.splice(entries.indexOf(e), 1);
+          save(KEY, entries);
+          renderList();
+          if (exportArea.style.display === 'block') doExport();
+        }
+      };
+      div.appendChild(left);
+      div.appendChild(time);
+      div.appendChild(del);
+      entryList.appendChild(div);
+    });
+  }
+
+  function tick(){
+    if (!current) return;
+    var s = Math.floor((Date.now() - current.start) / 1000);
+    var h = Math.floor(s/3600), m = Math.floor(s%3600/60), sec = s%60;
+    $('elapsed').textContent = (h ? String(h).padStart(2,'0') + ':' : '') +
+      String(m).padStart(2,'0') + ':' + String(sec).padStart(2,'0');
+  }
+
+  function renderState(){
+    if (current) {
+      idleView.style.display = 'none';
+      runningView.style.display = 'block';
+      $('runningTask').textContent = current.task;
+      $('runningSince').textContent = '開始於 ' + hm(current.start);
+      noteInputRunning.value = current.note || '';
+      tick();
+      if (!timer) timer = setInterval(tick, 1000);
+    } else {
+      idleView.style.display = 'block';
+      runningView.style.display = 'none';
+      if (timer) { clearInterval(timer); timer = null; }
+    }
+  }
+
+  $('startBtn').onclick = function(){
+    var task = taskInput.value.trim();
+    if (!task) { showToast('請先輸入正在做的事情'); taskInput.focus(); return; }
+    current = { task: task, note: noteInput.value.trim(), start: Date.now() };
+    save(CUR, current);
+    taskInput.value = ''; noteInput.value = '';
+    renderState();
+    showToast('已開始：' + hm(current.start));
+  };
+
+  noteInputRunning.oninput = function(){
+    if (current) { current.note = noteInputRunning.value; save(CUR, current); }
+  };
+
+  $('endBtn').onclick = function(){
+    if (!current) return;
+    var end = Date.now();
+    entries.push({
+      date: todayStr(new Date(current.start)),
+      task: current.task,
+      note: (current.note || '').trim(),
+      start: current.start,
+      end: end
+    });
+    save(KEY, entries);
+    showToast('已結束：' + hm(end));
+    current = null;
+    localStorage.removeItem(CUR);
+    renderState();
+    renderList();
+    if (exportArea.style.display === 'block') doExport();
+  };
+
+  function doExport(){
+    var list = todayEntries();
+    if (!list.length) { showToast('今天還沒有任何記錄'); exportArea.style.display = 'none'; return; }
+    $('exportTitle').textContent = todayStr() + ' 的記錄（共 ' + list.length + ' 筆）';
+    var tbody = $('exportTable').querySelector('tbody');
+    tbody.innerHTML = '';
+    list.forEach(function(e){
+      var tr = document.createElement('tr');
+      [e.task, hm(e.start), hm(e.end), e.note || '—'].forEach(function(v, i){
+        var td = document.createElement('td');
+        if (i === 1 || i === 2) td.className = 't';
+        td.textContent = v;
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+    exportArea.style.display = 'block';
+    exportArea.scrollIntoView({ behavior: 'smooth' });
+  }
+
+  $('exportBtn').onclick = doExport;
+
+  function exportText(){
+    var list = todayEntries();
+    var lines = [todayStr() + ' 的記錄', '事件\t開始\t結束\t備註'];
+    list.forEach(function(e){
+      lines.push([e.task, hm(e.start), hm(e.end), e.note || ''].join('\t'));
+    });
+    return lines.join('\n');
+  }
+
+  $('copyBtn').onclick = function(){
+    var text = exportText();
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text).then(
+        function(){ showToast('已複製到剪貼簿') },
+        function(){ fallbackCopy(text) }
+      );
+    } else fallbackCopy(text);
+  };
+
+  function fallbackCopy(text){
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    showToast('已複製到剪貼簿');
+  }
+
+  $('shareBtn').onclick = function(){
+    var text = exportText();
+    if (navigator.share) {
+      navigator.share({ text: text }).catch(function(){});
+    } else {
+      fallbackCopy(text);
+    }
+  };
+
+  renderState();
+  renderList();
+})();
+</script>
+</body>
+</html>
