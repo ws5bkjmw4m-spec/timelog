@@ -118,6 +118,33 @@
     pointer-events: none; white-space: nowrap;
   }
   .toast.show { opacity: 1; }
+  /* 編輯/新增視窗 */
+  .modal-overlay {
+    display: none; position: fixed; inset: 0; z-index: 10;
+    background: rgba(0,0,0,0.45);
+    align-items: center; justify-content: center; padding: 20px;
+  }
+  .modal-overlay.show { display: flex; }
+  .modal {
+    background: var(--card); border-radius: 16px; padding: 20px;
+    width: 100%; max-width: 400px; box-shadow: 0 8px 30px rgba(0,0,0,0.2);
+  }
+  .modal h2 { margin: 0 0 14px; font-size: 18px; }
+  .time-row { display: flex; gap: 10px; }
+  .time-row > div { flex: 1; }
+  input[type=time] {
+    width: 100%; font-size: 17px; padding: 10px 12px;
+    border: 1px solid var(--border); border-radius: 10px;
+    background: var(--bg); margin-bottom: 12px; font-family: inherit;
+    -webkit-appearance: none;
+  }
+  .toolbar button.primary { background: var(--accent); color: #fff; }
+  .add-btn {
+    border: 1px solid var(--accent); background: #fff; color: var(--accent);
+    font-size: 14px; font-weight: 600; padding: 6px 12px;
+    border-radius: 8px; font-family: inherit;
+  }
+  .add-btn:active { background: var(--bg); }
 </style>
 </head>
 <body>
@@ -146,7 +173,7 @@
 </div>
 
 <!-- 今日記錄 -->
-<h2>今日記錄</h2>
+<h2 style="display:flex;justify-content:space-between;align-items:center">今日記錄 <button class="add-btn" id="addBtn">＋ 手動新增</button></h2>
 <div class="card" id="listCard">
   <div class="empty" id="emptyMsg">尚無記錄，按「開始」記錄第一件事吧！</div>
   <div id="entryList"></div>
@@ -166,6 +193,25 @@
   <div class="toolbar">
     <button id="copyBtn">複製文字</button>
     <button id="shareBtn">分享</button>
+  </div>
+</div>
+
+<!-- 編輯/新增視窗 -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h2 id="modalTitle">編輯記錄</h2>
+    <label>事件名稱</label>
+    <input type="text" id="mName" placeholder="例如：開會、讀書、運動…">
+    <div class="time-row">
+      <div><label>開始時間</label><input type="time" id="mStart"></div>
+      <div><label>結束時間</label><input type="time" id="mEnd"></div>
+    </div>
+    <label>備註（可留空）</label>
+    <textarea id="mNote"></textarea>
+    <div class="toolbar">
+      <button id="mCancel">取消</button>
+      <button id="mSave" class="primary">儲存</button>
+    </div>
   </div>
 </div>
 
@@ -210,25 +256,64 @@
 
   function todayEntries(){
     var t = todayStr();
-    return entries.filter(function(e){ return e.date === t });
+    return entries.filter(function(e){ return e.date === t })
+                  .sort(function(a,b){ return a.start - b.start });
   }
 
-  function editNote(entry){
-    var v = prompt('修改「' + entry.task + '」的備註：', entry.note || '');
-    if (v !== null) {
-      entry.note = v.trim();
-      save(KEY, entries);
-      renderList();
-      if (exportArea.style.display === 'block') doExport();
-      showToast('備註已更新');
-    }
+  // 編輯 / 手動新增視窗
+  var editingEntry = null;
+  function tsFromHM(dateStr, hmStr){
+    var p = hmStr.split(':');
+    var d = new Date(dateStr + 'T00:00:00');
+    d.setHours(+p[0], +p[1], 0, 0);
+    return d.getTime();
   }
+  function openModal(entry){
+    editingEntry = entry;
+    $('modalTitle').textContent = entry ? '編輯記錄' : '手動新增記錄';
+    $('mName').value = entry ? entry.task : '';
+    $('mStart').value = entry ? hm(entry.start) : '';
+    $('mEnd').value = entry ? hm(entry.end) : '';
+    $('mNote').value = entry ? (entry.note || '') : '';
+    $('modalOverlay').classList.add('show');
+  }
+  function closeModal(){
+    $('modalOverlay').classList.remove('show');
+    editingEntry = null;
+  }
+  $('mCancel').onclick = closeModal;
+  $('modalOverlay').addEventListener('click', function(ev){
+    if (ev.target === this) closeModal();
+  });
+  $('mSave').onclick = function(){
+    var name = $('mName').value.trim();
+    var s = $('mStart').value, en = $('mEnd').value;
+    if (!name) { showToast('請輸入事件名稱'); return; }
+    if (!s || !en) { showToast('請選擇開始和結束時間'); return; }
+    var date = editingEntry ? editingEntry.date : todayStr();
+    var startTs = tsFromHM(date, s), endTs = tsFromHM(date, en);
+    if (endTs < startTs) { showToast('結束時間不能早於開始時間'); return; }
+    if (editingEntry) {
+      editingEntry.task = name;
+      editingEntry.start = startTs;
+      editingEntry.end = endTs;
+      editingEntry.note = $('mNote').value.trim();
+    } else {
+      entries.push({ date: date, task: name, note: $('mNote').value.trim(), start: startTs, end: endTs });
+    }
+    save(KEY, entries);
+    closeModal();
+    renderList();
+    if (exportArea.style.display === 'block') doExport();
+    showToast('已儲存');
+  };
+  $('addBtn').onclick = function(){ openModal(null); };
 
   function attachLongPress(el, entry){
     var timer = null;
     function start(ev){
       if (ev.target.closest && ev.target.closest('button')) return;
-      timer = setTimeout(function(){ timer = null; editNote(entry); }, 550);
+      timer = setTimeout(function(){ timer = null; openModal(entry); }, 550);
     }
     function cancel(){ if (timer) { clearTimeout(timer); timer = null; } }
     el.addEventListener('touchstart', start);
