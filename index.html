@@ -34,6 +34,17 @@
     align-items: baseline;
   }
   h1 .date { font-size: 22px; color: var(--text); font-weight: 700; }
+  .date-nav { display: flex; align-items: center; gap: 2px; }
+  .date-nav button {
+    border: none; background: none; color: var(--accent);
+    font-size: 18px; padding: 4px 8px; font-family: inherit;
+  }
+  .date-nav button:active { opacity: 0.5; }
+  #dateInput {
+    border: none; background: transparent; font-size: 20px;
+    font-weight: 700; color: var(--text); font-family: inherit;
+    padding: 0; -webkit-appearance: none; appearance: none;
+  }
   .card {
     background: var(--card);
     border-radius: 14px;
@@ -149,7 +160,13 @@
 </head>
 <body>
 
-<h1>時間記錄 <span class="date" id="todayLabel"></span></h1>
+<h1>時間記錄
+  <span class="date-nav">
+    <button id="prevDay">◀</button>
+    <input type="date" id="dateInput">
+    <button id="nextDay">▶</button>
+  </span>
+</h1>
 
 <!-- 輸入區 -->
 <div class="card" id="inputCard">
@@ -173,13 +190,13 @@
 </div>
 
 <!-- 今日記錄 -->
-<h2 style="display:flex;justify-content:space-between;align-items:center">今日記錄 <button class="add-btn" id="addBtn">＋ 手動新增</button></h2>
+<h2 style="display:flex;justify-content:space-between;align-items:center"><span id="listTitle">今日記錄</span> <button class="add-btn" id="addBtn">＋ 手動新增</button></h2>
 <div class="card" id="listCard">
   <div class="empty" id="emptyMsg">尚無記錄，按「開始」記錄第一件事吧！</div>
   <div id="entryList"></div>
 </div>
 
-<button class="btn btn-export" id="exportBtn">📋 一鍵輸出今日記錄</button>
+<button class="btn btn-export" id="exportBtn">📋 一鍵輸出當日記錄</button>
 
 <!-- 輸出區 -->
 <div class="card" id="exportArea">
@@ -245,7 +262,26 @@
   var entryList = $('entryList'), emptyMsg = $('emptyMsg');
   var exportArea = $('exportArea');
 
-  $('todayLabel').textContent = todayStr();
+  // 檢視日期（預設今天）
+  var viewDate = todayStr();
+  var dateInput = $('dateInput');
+  dateInput.value = viewDate;
+  function setViewDate(d){
+    viewDate = d;
+    dateInput.value = d;
+    renderList();
+    if (exportArea.style.display === 'block') doExport();
+  }
+  dateInput.addEventListener('change', function(){
+    if (this.value) setViewDate(this.value);
+  });
+  function shiftDay(n){
+    var d = new Date(viewDate + 'T00:00:00');
+    d.setDate(d.getDate() + n);
+    setViewDate(todayStr(d));
+  }
+  $('prevDay').onclick = function(){ shiftDay(-1); };
+  $('nextDay').onclick = function(){ shiftDay(1); };
 
   function showToast(msg){
     var t = $('toast');
@@ -255,8 +291,7 @@
   }
 
   function todayEntries(){
-    var t = todayStr();
-    return entries.filter(function(e){ return e.date === t })
+    return entries.filter(function(e){ return e.date === viewDate })
                   .sort(function(a,b){ return a.start - b.start });
   }
 
@@ -290,7 +325,7 @@
     var s = $('mStart').value, en = $('mEnd').value;
     if (!name) { showToast('請輸入事件名稱'); return; }
     if (!s || !en) { showToast('請選擇開始和結束時間'); return; }
-    var date = editingEntry ? editingEntry.date : todayStr();
+    var date = editingEntry ? editingEntry.date : viewDate;
     var startTs = tsFromHM(date, s), endTs = tsFromHM(date, en);
     if (endTs < startTs) { showToast('結束時間不能早於開始時間'); return; }
     if (editingEntry) {
@@ -328,6 +363,10 @@
   }
 
   function renderList(){
+    var isToday = viewDate === todayStr();
+    $('inputCard').style.display = isToday ? 'block' : 'none';
+    $('listTitle').textContent = isToday ? '今日記錄' : viewDate + ' 的記錄';
+    emptyMsg.textContent = isToday ? '尚無記錄，按「開始」記錄第一件事吧！' : '這一天沒有記錄';
     var list = todayEntries();
     emptyMsg.style.display = list.length ? 'none' : 'block';
     entryList.innerHTML = '';
@@ -427,8 +466,8 @@
 
   function doExport(){
     var list = todayEntries();
-    if (!list.length) { showToast('今天還沒有任何記錄'); exportArea.style.display = 'none'; return; }
-    $('exportTitle').textContent = todayStr() + ' 的記錄（共 ' + list.length + ' 筆）';
+    if (!list.length) { showToast('這一天沒有任何記錄'); exportArea.style.display = 'none'; return; }
+    $('exportTitle').textContent = viewDate + ' 的記錄（共 ' + list.length + ' 筆）';
     var tbody = $('exportTable').querySelector('tbody');
     tbody.innerHTML = '';
     list.forEach(function(e){
@@ -449,7 +488,7 @@
 
   function exportText(){
     var list = todayEntries();
-    var lines = [todayStr() + ' 的記錄', '事件\t開始\t結束\t備註'];
+    var lines = [viewDate + ' 的記錄', '事件\t開始\t結束\t備註'];
     list.forEach(function(e){
       lines.push([e.task, hm(e.start), hm(e.end), e.note || ''].join('\t'));
     });
