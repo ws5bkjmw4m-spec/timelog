@@ -33,7 +33,7 @@
     justify-content: space-between;
     align-items: baseline;
   }
-  h1 .date { font-size: 14px; color: var(--sub); font-weight: 400; }
+  h1 .date { font-size: 22px; color: var(--text); font-weight: 700; }
   .card {
     background: var(--card);
     border-radius: 14px;
@@ -84,6 +84,9 @@
     padding: 12px 0;
     border-bottom: 1px solid var(--border);
     gap: 8px;
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
   }
   .entry:last-child { border-bottom: none; }
   .entry .name { font-weight: 600; font-size: 16px; }
@@ -210,6 +213,35 @@
     return entries.filter(function(e){ return e.date === t });
   }
 
+  function editNote(entry){
+    var v = prompt('修改「' + entry.task + '」的備註：', entry.note || '');
+    if (v !== null) {
+      entry.note = v.trim();
+      save(KEY, entries);
+      renderList();
+      if (exportArea.style.display === 'block') doExport();
+      showToast('備註已更新');
+    }
+  }
+
+  function attachLongPress(el, entry){
+    var timer = null;
+    function start(ev){
+      if (ev.target.closest && ev.target.closest('button')) return;
+      timer = setTimeout(function(){ timer = null; editNote(entry); }, 550);
+    }
+    function cancel(){ if (timer) { clearTimeout(timer); timer = null; } }
+    el.addEventListener('touchstart', start);
+    el.addEventListener('touchmove', cancel);
+    el.addEventListener('touchend', cancel);
+    el.addEventListener('touchcancel', cancel);
+    el.addEventListener('mousedown', start);
+    el.addEventListener('mousemove', cancel);
+    el.addEventListener('mouseup', cancel);
+    el.addEventListener('mouseleave', cancel);
+    el.addEventListener('contextmenu', function(ev){ ev.preventDefault(); });
+  }
+
   function renderList(){
     var list = todayEntries();
     emptyMsg.style.display = list.length ? 'none' : 'block';
@@ -246,6 +278,7 @@
       div.appendChild(left);
       div.appendChild(time);
       div.appendChild(del);
+      attachLongPress(div, e);
       entryList.appendChild(div);
     });
   }
