@@ -156,6 +156,16 @@
     border-radius: 8px; font-family: inherit;
   }
   .add-btn:active { background: var(--bg); }
+  .task-row { display: flex; gap: 8px; align-items: stretch; }
+  .task-row input { flex: 1; }
+  #quickSelect {
+    width: 92px; font-size: 15px; font-weight: 600;
+    border: 1px solid var(--accent); border-radius: 10px;
+    background: #fff; color: var(--accent); padding: 0 10px;
+    font-family: inherit; -webkit-appearance: none; appearance: none;
+    margin-bottom: 12px;
+  }
+  #quickSelect:active { background: var(--bg); }
 </style>
 </head>
 <body>
@@ -172,7 +182,10 @@
 <div class="card" id="inputCard">
   <div id="idleView">
     <label>正在做的事情</label>
-    <input type="text" id="taskInput" placeholder="例如：開會、讀書、運動…">
+    <div class="task-row">
+      <input type="text" id="taskInput" placeholder="例如：開會、讀書、運動…">
+      <select id="quickSelect"><option value="">常用 ▾</option></select>
+    </div>
     <label>備註（可留空）</label>
     <textarea id="noteInput" placeholder="想補充的內容…"></textarea>
     <button class="btn btn-start" id="startBtn">▶ 開始</button>
@@ -362,7 +375,28 @@
     el.addEventListener('contextmenu', function(ev){ ev.preventDefault(); });
   }
 
+  function renderQuickSelect(){
+    var counts = {};
+    entries.forEach(function(e){ counts[e.task] = (counts[e.task] || 0) + 1; });
+    var names = Object.keys(counts)
+      .sort(function(a,b){ return counts[b] - counts[a]; })
+      .slice(0, 15);
+    var sel = $('quickSelect');
+    sel.innerHTML = '<option value="">常用 ▾</option>';
+    names.forEach(function(n){
+      var o = document.createElement('option');
+      o.value = n; o.textContent = n;
+      sel.appendChild(o);
+    });
+    sel.style.display = names.length ? 'block' : 'none';
+  }
+  $('quickSelect').onchange = function(){
+    if (this.value) taskInput.value = this.value;
+    this.selectedIndex = 0;
+  };
+
   function renderList(){
+    renderQuickSelect();
     var isToday = viewDate === todayStr();
     $('inputCard').style.display = isToday ? 'block' : 'none';
     $('listTitle').textContent = isToday ? '今日記錄' : viewDate + ' 的記錄';
