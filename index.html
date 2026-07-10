@@ -24,7 +24,28 @@
     font-family: -apple-system, "PingFang TC", "Helvetica Neue", sans-serif;
     background: var(--bg);
     color: var(--text);
-    padding: env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 24px);
+    padding: env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 80px);
+  }
+  .tabbar {
+    position: fixed; bottom: 0; left: 0; right: 0; z-index: 5;
+    display: flex; background: var(--card);
+    border-top: 1px solid var(--border);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+  .tabbar button {
+    flex: 1; border: none; background: none;
+    font-size: 15px; font-weight: 600; padding: 12px 0 10px;
+    color: var(--sub); font-family: inherit;
+  }
+  .tabbar button.active { color: var(--accent); }
+  #noteArea {
+    height: 45vh; font-size: 17px; margin-bottom: 6px;
+  }
+  .note-hint { font-size: 12px; color: var(--sub); text-align: center; }
+  #exportNotes {
+    display: none; margin-top: 12px; padding: 10px 12px;
+    background: var(--bg); border-radius: 10px;
+    font-size: 14px; white-space: pre-wrap; word-break: break-all;
   }
   h1 {
     font-size: 22px;
@@ -178,6 +199,8 @@
   </span>
 </h1>
 
+<div id="pageLog">
+
 <!-- 輸入區 -->
 <div class="card" id="inputCard">
   <div id="idleView">
@@ -220,10 +243,28 @@
     </thead>
     <tbody></tbody>
   </table>
+  <div id="exportNotes"></div>
   <div class="toolbar">
     <button id="copyBtn">複製文字</button>
     <button id="shareBtn">分享</button>
   </div>
+</div>
+
+</div><!-- /pageLog -->
+
+<!-- 筆記頁 -->
+<div id="pageNotes" style="display:none">
+  <h2 id="notesTitle">當日筆記</h2>
+  <div class="card">
+    <textarea id="noteArea" placeholder="在這裡寫下這一天的筆記…"></textarea>
+    <div class="note-hint">筆記會自動儲存，輸出當日記錄時會一併帶上</div>
+  </div>
+</div>
+
+<!-- 底部分頁切換 -->
+<div class="tabbar">
+  <button id="tabLog" class="active">⏱ 記錄</button>
+  <button id="tabNotes">📝 筆記</button>
 </div>
 
 <!-- 編輯/新增視窗 -->
@@ -251,6 +292,7 @@
 (function(){
   var KEY = 'timeLogEntries';
   var CUR = 'timeLogCurrent';
+  var NOTES = 'timeLogNotes';
 
   function load(k){ try { return JSON.parse(localStorage.getItem(k)) } catch(e){ return null } }
   function save(k,v){ localStorage.setItem(k, JSON.stringify(v)) }
@@ -266,6 +308,7 @@
 
   var entries = load(KEY) || [];   // {date, task, note, start, end}
   var current = load(CUR);         // {task, note, start} 或 null
+  var notes = load(NOTES) || {};   // {date: 筆記文字}
   var timer = null;
 
   // DOM
@@ -283,6 +326,7 @@
     viewDate = d;
     dateInput.value = d;
     renderList();
+    loadNote();
     if (exportArea.style.display === 'block') doExport();
   }
   dateInput.addEventListener('change', function(){
@@ -295,6 +339,28 @@
   }
   $('prevDay').onclick = function(){ shiftDay(-1); };
   $('nextDay').onclick = function(){ shiftDay(1); };
+
+  // 筆記頁
+  var noteArea = $('noteArea');
+  function loadNote(){
+    noteArea.value = notes[viewDate] || '';
+    $('notesTitle').textContent = (viewDate === todayStr() ? '今日' : viewDate + ' 的') + '筆記';
+  }
+  noteArea.addEventListener('input', function(){
+    if (this.value.trim()) notes[viewDate] = this.value;
+    else delete notes[viewDate];
+    save(NOTES, notes);
+  });
+
+  // 分頁切換
+  function switchPage(p){
+    $('pageLog').style.display = p === 'log' ? 'block' : 'none';
+    $('pageNotes').style.display = p === 'notes' ? 'block' : 'none';
+    $('tabLog').classList.toggle('active', p === 'log');
+    $('tabNotes').classList.toggle('active', p === 'notes');
+  }
+  $('tabLog').onclick = function(){ switchPage('log'); };
+  $('tabNotes').onclick = function(){ switchPage('notes'); };
 
   function showToast(msg){
     var t = $('toast');
@@ -514,6 +580,14 @@
       });
       tbody.appendChild(tr);
     });
+    var noteText = (notes[viewDate] || '').trim();
+    var en = $('exportNotes');
+    if (noteText) {
+      en.textContent = '📝 當日筆記：\n' + noteText;
+      en.style.display = 'block';
+    } else {
+      en.style.display = 'none';
+    }
     exportArea.style.display = 'block';
     exportArea.scrollIntoView({ behavior: 'smooth' });
   }
@@ -526,6 +600,8 @@
     list.forEach(function(e){
       lines.push([e.task, hm(e.start), hm(e.end), e.note || ''].join('\t'));
     });
+    var noteText = (notes[viewDate] || '').trim();
+    if (noteText) lines.push('', '當日筆記：', noteText);
     return lines.join('\n');
   }
 
@@ -560,6 +636,7 @@
 
   renderState();
   renderList();
+  loadNote();
 })();
 </script>
 </body>
