@@ -187,6 +187,22 @@
     margin-bottom: 12px;
   }
   #quickSelect:active { background: var(--bg); }
+  /* 常用清單管理 */
+  #favList { max-height: 44vh; overflow-y: auto; margin-bottom: 4px; }
+  .fav-row {
+    display: flex; align-items: center; gap: 4px;
+    padding: 10px 0; border-bottom: 1px solid var(--border);
+  }
+  .fav-row:last-child { border-bottom: none; }
+  .fav-row .fav-name { flex: 1; font-size: 16px; font-weight: 600; word-break: break-all; }
+  .fav-row button {
+    border: none; background: none; color: var(--accent);
+    font-size: 16px; padding: 4px 7px; font-family: inherit;
+  }
+  .fav-row button.del { color: var(--red); }
+  .fav-row button:disabled { opacity: 0.22; }
+  .fav-empty { text-align: center; color: var(--sub); font-size: 14px; padding: 16px 0; line-height: 1.6; }
+  #favAdd { margin-bottom: 12px; white-space: nowrap; }
 </style>
 </head>
 <body>
@@ -286,6 +302,22 @@
   </div>
 </div>
 
+<!-- 常用清單管理視窗 -->
+<div class="modal-overlay" id="favOverlay">
+  <div class="modal">
+    <h2>常用項目</h2>
+    <label>新增項目</label>
+    <div class="task-row">
+      <input type="text" id="favInput" placeholder="例如：讀書、運動、日文…">
+      <button class="add-btn" id="favAdd">＋ 新增</button>
+    </div>
+    <div id="favList"></div>
+    <div class="toolbar">
+      <button id="favClose" class="primary">完成</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -293,6 +325,7 @@
   var KEY = 'timeLogEntries';
   var CUR = 'timeLogCurrent';
   var NOTES = 'timeLogNotes';
+  var FAVS  = 'timeLogFavs';
 
   function load(k){ try { return JSON.parse(localStorage.getItem(k)) } catch(e){ return null } }
   function save(k,v){ localStorage.setItem(k, JSON.stringify(v)) }
@@ -309,6 +342,7 @@
   var entries = load(KEY) || [];   // {date, task, note, start, end}
   var current = load(CUR);         // {task, note, start} 或 null
   var notes = load(NOTES) || {};   // {date: 筆記文字}
+  var favs = load(FAVS) || [];     // ['讀書','運動',…] 手動維護的常用項目
   var timer = null;
 
   // DOM
@@ -441,25 +475,113 @@
     el.addEventListener('contextmenu', function(ev){ ev.preventDefault(); });
   }
 
-  function renderQuickSelect(){
-    var counts = {};
-    entries.forEach(function(e){ counts[e.task] = (counts[e.task] || 0) + 1; });
-    var names = Object.keys(counts)
-      .sort(function(a,b){ return counts[b] - counts[a]; })
-      .slice(0, 15);
-    var sel = $('quickSelect');
-    sel.innerHTML = '<option value="">常用 ▾</option>';
+  function addOptions(parent, names){
     names.forEach(function(n){
       var o = document.createElement('option');
       o.value = n; o.textContent = n;
-      sel.appendChild(o);
+      parent.appendChild(o);
     });
-    sel.style.display = names.length ? 'block' : 'none';
   }
+
+  function renderQuickSelect(){
+    var sel = $('quickSelect');
+    sel.innerHTML = '';
+    var ph = document.createElement('option');
+    ph.value = ''; ph.textContent = '常用 ▾';
+    sel.appendChild(ph);
+
+    // 手動維護的常用項目（照自己排的順序）
+    if (favs.length) {
+      var g1 = document.createElement('optgroup');
+      g1.label = '我的常用';
+      addOptions(g1, favs);
+      sel.appendChild(g1);
+    }
+
+    // 過去記錄自動統計，排除已經在手動清單裡的
+    var counts = {};
+    entries.forEach(function(e){ counts[e.task] = (counts[e.task] || 0) + 1; });
+    var auto = Object.keys(counts)
+      .filter(function(n){ return favs.indexOf(n) === -1; })
+      .sort(function(a,b){ return counts[b] - counts[a]; })
+      .slice(0, 10);
+    if (auto.length) {
+      var g2 = document.createElement('optgroup');
+      g2.label = '最近常做';
+      addOptions(g2, auto);
+      sel.appendChild(g2);
+    }
+
+    var manage = document.createElement('option');
+    manage.value = '__manage__'; manage.textContent = '⚙ 編輯常用清單…';
+    sel.appendChild(manage);
+    sel.selectedIndex = 0;
+  }
+
   $('quickSelect').onchange = function(){
-    if (this.value) taskInput.value = this.value;
+    var v = this.value;
     this.selectedIndex = 0;
+    if (v === '__manage__') { openFav(); return; }
+    if (v) taskInput.value = v;
   };
+
+  // 常用清單管理
+  function saveFavs(){
+    save(FAVS, favs);
+    renderFavList();
+    renderQuickSelect();
+  }
+  function renderFavList(){
+    var box = $('favList');
+    box.innerHTML = '';
+    if (!favs.length) {
+      var p = document.createElement('div');
+      p.className = 'fav-empty';
+      p.textContent = '還沒有常用項目。在上面輸入名稱後按「＋ 新增」，之後就能從「常用 ▾」直接選。';
+      box.appendChild(p);
+      return;
+    }
+    favs.forEach(function(name, i){
+      var row = document.createElement('div');
+      row.className = 'fav-row';
+      var t = document.createElement('div');
+      t.className = 'fav-name';
+      t.textContent = name;
+      var up = document.createElement('button');
+      up.textContent = '▲'; up.disabled = (i === 0);
+      up.onclick = function(){ favs.splice(i - 1, 0, favs.splice(i, 1)[0]); saveFavs(); };
+      var dn = document.createElement('button');
+      dn.textContent = '▼'; dn.disabled = (i === favs.length - 1);
+      dn.onclick = function(){ favs.splice(i + 1, 0, favs.splice(i, 1)[0]); saveFavs(); };
+      var del = document.createElement('button');
+      del.className = 'del'; del.textContent = '✕';
+      del.onclick = function(){ favs.splice(i, 1); saveFavs(); };
+      row.appendChild(t); row.appendChild(up); row.appendChild(dn); row.appendChild(del);
+      box.appendChild(row);
+    });
+  }
+  function openFav(){
+    $('favInput').value = taskInput.value.trim();  // 已經打了字就直接帶入
+    renderFavList();
+    $('favOverlay').classList.add('show');
+  }
+  function addFav(){
+    var v = $('favInput').value.trim();
+    if (!v) { showToast('請先輸入名稱'); $('favInput').focus(); return; }
+    if (favs.indexOf(v) !== -1) { showToast('這個項目已經在清單裡了'); return; }
+    favs.push(v);
+    $('favInput').value = '';
+    saveFavs();
+    showToast('已加入常用');
+  }
+  $('favAdd').onclick = addFav;
+  $('favInput').addEventListener('keydown', function(ev){
+    if (ev.key === 'Enter') { ev.preventDefault(); addFav(); }
+  });
+  $('favClose').onclick = function(){ $('favOverlay').classList.remove('show'); };
+  $('favOverlay').addEventListener('click', function(ev){
+    if (ev.target === this) this.classList.remove('show');
+  });
 
   function renderList(){
     renderQuickSelect();
