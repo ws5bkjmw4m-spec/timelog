@@ -2,7 +2,7 @@
 <html lang="zh-Hant">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="時間記錄">
@@ -203,9 +203,59 @@
   .fav-row button:disabled { opacity: 0.22; }
   .fav-empty { text-align: center; color: var(--sub); font-size: 14px; padding: 16px 0; line-height: 1.6; }
   #favAdd { margin-bottom: 12px; white-space: nowrap; }
+
+/* TimeLog Light — monthly-budget palette; existing controls and data keys retained. */
+:root { color-scheme:dark; --bg:#0E1319; --card:#161E28; --text:#EAF0F6;
+ --sub:#7E90A2; --accent:#FFB224; --green:#37D9A0; --red:#FF5A4E; --border:#27323F;
+ --panel-2:#1B2531; --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,monospace; }
+body { max-width:520px; margin:auto; padding:calc(28px + env(safe-area-inset-top)) 16px calc(104px + env(safe-area-inset-bottom)); -webkit-font-smoothing:antialiased; }
+.eyebrow { display:flex;justify-content:space-between;font-size:11px;letter-spacing:.22em;color:var(--sub); }
+h1 { flex-wrap:wrap;gap:14px;font-size:24px;margin:18px 0 22px; }
+.date-nav { margin-left:auto; }
+#dateInput { font-size:15px;max-width:142px;color:var(--sub); }
+.date-nav button { font-size:14px;min-width:40px;min-height:44px; }
+.card { border:1px solid var(--border);box-shadow:none;padding:18px 16px;border-radius:14px; }
+h2 { font-size:12px;font-weight:500;letter-spacing:.12em;color:var(--sub);margin:24px 0 10px; }
+input[type=text],input[type=time],textarea { color:var(--text);background:var(--panel-2);font-size:16px;border-radius:9px; }
+input::placeholder,textarea::placeholder { color:#627588; }
+input:focus-visible,textarea:focus-visible,button:focus-visible,select:focus-visible { outline:2px solid var(--green);outline-offset:2px; }
+.btn { font-size:16px;padding:14px;border-radius:9px;cursor:pointer;min-height:48px; }
+.btn-start { background:var(--text);color:var(--bg); }
+.btn-end { background:var(--red);color:var(--bg); }
+.btn-export { background:var(--panel-2);border:1px solid var(--border);color:var(--text); }
+.toolbar button,.add-btn,#quickSelect { background:var(--panel-2);border-color:var(--border);color:var(--text);border-radius:9px;min-height:44px; }
+.toolbar button.primary { background:var(--text);color:var(--bg); }
+#quickSelect { width:88px;color:var(--accent); }
+.running { text-align:left;padding:4px 0 20px; }
+.running .task { font-size:18px; }
+.running .elapsed { font:700 46px var(--mono);letter-spacing:-.04em;color:var(--green);margin-top:18px; }
+.running .since { font-size:12px; }
+.entry { padding:15px 0;align-items:center; }
+.entry .time { font:12px var(--mono);color:var(--sub); }
+.entry .del { min-width:36px;min-height:44px;font-size:15px;color:var(--sub); }
+.entry .name { font-size:15px; }
+.entry .note { line-height:1.6; }
+.tabbar { max-width:520px;margin:auto;background:var(--bg); }
+.tabbar button { min-height:56px;font-size:14px;font-weight:500; }
+.tabbar button.active { color:var(--green); }
+.toast { z-index:30;bottom:calc(80px + env(safe-area-inset-bottom));background:var(--text);color:var(--bg);max-width:calc(100% - 32px);white-space:normal; }
+.modal { max-height:85vh;overflow:auto;border:1px solid var(--border); }
+.modal-overlay { background:rgba(0,0,0,.7); }
+.summary-label { font-size:11px;letter-spacing:.18em;color:var(--sub); }
+.summary-value { font:700 42px var(--mono);letter-spacing:-.04em;margin:12px 0 18px; }
+.summary-value small { font:12px -apple-system,sans-serif;color:var(--sub);margin-left:8px;letter-spacing:0; }
+.summary-track { height:12px;border-radius:3px;overflow:hidden;background:var(--panel-2);display:flex; }
+.summary-track span { height:100%;min-width:2px; }
+.summary-bottom { display:flex;justify-content:space-between;margin-top:12px;font-size:12px;color:var(--sub); }
+.store-note { font-size:12px;line-height:1.7;text-align:center;color:var(--sub);margin:16px 0; }
+.backup-button { width:100%;background:var(--panel-2);color:var(--text);border:1px solid var(--border);border-radius:9px;min-height:44px;font:14px inherit; }
+@media (max-width:360px) { h1{font-size:21px} .date-nav{gap:0} .date-nav button{padding:4px;min-width:32px} }
+@media (prefers-reduced-motion:reduce) { *{scroll-behavior:auto!important;transition:none!important} }
 </style>
 </head>
 <body>
+
+<div class="eyebrow"><span>TIMELOG / LIGHT</span><span>把時間留給重要的事</span></div>
 
 <h1>時間記錄
   <span class="date-nav">
@@ -216,6 +266,13 @@
 </h1>
 
 <div id="pageLog">
+
+<div class="card" id="summaryCard">
+ <div class="summary-label" id="summaryLabel">今日已記錄</div>
+ <div class="summary-value"><span id="totalTime">0</span><small>分鐘</small></div>
+ <div class="summary-track" id="timeTrack" aria-hidden="true"></div>
+ <div class="summary-bottom"><span id="entryCount">0 筆事件</span><span id="summaryHint">從一件事情開始</span></div>
+</div>
 
 <!-- 輸入區 -->
 <div class="card" id="inputCard">
@@ -237,7 +294,7 @@
     </div>
     <label>備註（可隨時修改）</label>
     <textarea id="noteInputRunning"></textarea>
-    <button class="btn btn-end" id="endBtn">■ 結束</button>
+    <button class="btn btn-end" id="endBtn">■ 結束並記錄</button>
   </div>
 </div>
 
@@ -264,6 +321,14 @@
     <button id="copyBtn">複製文字</button>
     <button id="shareBtn">分享</button>
   </div>
+</div>
+
+<p class="store-note">資料儲存在這個瀏覽器。換裝置前，請先備份。</p>
+<button class="backup-button" id="backupJSON">匯出完整備份</button>
+<div id="backupPanel" style="display:none;margin-top:14px">
+  <label for="backupText">完整備份。若下載未啟動，可複製以下內容，存成 .json 檔。</label>
+  <textarea id="backupText" readonly style="height:140px;font:12px var(--mono)" aria-label="完整 JSON 備份"></textarea>
+  <button class="backup-button" id="copyBackup">複製完整備份</button>
 </div>
 
 </div><!-- /pageLog -->
@@ -590,6 +655,18 @@
     $('listTitle').textContent = isToday ? '今日記錄' : viewDate + ' 的記錄';
     emptyMsg.textContent = isToday ? '尚無記錄，按「開始」記錄第一件事吧！' : '這一天沒有記錄';
     var list = todayEntries();
+    var total = list.reduce(function(sum,e){ return sum + Math.max(0,e.end-e.start); },0);
+    $('summaryLabel').textContent = isToday ? '今日已記錄' : viewDate + ' 已記錄';
+    $('totalTime').textContent = Math.round(total/60000).toLocaleString();
+    $('entryCount').textContent = list.length + ' 筆事件';
+    $('summaryHint').textContent = list.length ? '每一段時間，都有自己的位置' : '從一件事情開始';
+    var track = $('timeTrack'); track.innerHTML = '';
+    list.forEach(function(e,i){
+      var segment=document.createElement('span');
+      segment.style.width = (total ? Math.max(0,e.end-e.start)/total*100 : 0)+'%';
+      segment.style.background = ['var(--accent)','var(--green)','#7E90A2','#617EA0'][i%4];
+      track.appendChild(segment);
+    });
     emptyMsg.style.display = list.length ? 'none' : 'block';
     entryList.innerHTML = '';
     list.slice().reverse().forEach(function(e){
@@ -746,6 +823,18 @@
     document.body.removeChild(ta);
     showToast('已複製到剪貼簿');
   }
+
+  $('backupJSON').onclick = function(){
+    var backup = {format:'timelog-light',version:1,exportedAt:new Date().toISOString(),entries:entries,current:current,notes:notes,favs:favs};
+    $('backupText').value = JSON.stringify(backup,null,2);
+    $('backupPanel').style.display = 'block';
+    var blob = new Blob([JSON.stringify(backup,null,2)],{type:'application/json'});
+    var url=URL.createObjectURL(blob), a=document.createElement('a');
+    a.href=url;a.download='timelog-'+todayStr()+'.json';a.click();
+    setTimeout(function(){ URL.revokeObjectURL(url); },1000);
+    showToast('備份已準備，可下載或複製');
+  };
+  $('copyBackup').onclick = function(){ fallbackCopy($('backupText').value); };
 
   $('shareBtn').onclick = function(){
     var text = exportText();
