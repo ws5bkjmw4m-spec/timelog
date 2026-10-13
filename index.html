@@ -241,12 +241,6 @@ input:focus-visible,textarea:focus-visible,button:focus-visible,select:focus-vis
 .toast { z-index:30;bottom:calc(80px + env(safe-area-inset-bottom));background:var(--text);color:var(--bg);max-width:calc(100% - 32px);white-space:normal; }
 .modal { max-height:85vh;overflow:auto;border:1px solid var(--border); }
 .modal-overlay { background:rgba(0,0,0,.7); }
-.summary-label { font-size:11px;letter-spacing:.18em;color:var(--sub); }
-.summary-value { font:700 42px var(--mono);letter-spacing:-.04em;margin:12px 0 18px; }
-.summary-value small { font:12px -apple-system,sans-serif;color:var(--sub);margin-left:8px;letter-spacing:0; }
-.summary-track { height:12px;border-radius:3px;overflow:hidden;background:var(--panel-2);display:flex; }
-.summary-track span { height:100%;min-width:2px; }
-.summary-bottom { display:flex;justify-content:space-between;margin-top:12px;font-size:12px;color:var(--sub); }
 .store-note { font-size:12px;line-height:1.7;text-align:center;color:var(--sub);margin:16px 0; }
 .backup-button { width:100%;background:var(--panel-2);color:var(--text);border:1px solid var(--border);border-radius:9px;min-height:44px;font:14px inherit; }
 @media (max-width:360px) { h1{font-size:21px} .date-nav{gap:0} .date-nav button{padding:4px;min-width:32px} }
@@ -267,12 +261,6 @@ input:focus-visible,textarea:focus-visible,button:focus-visible,select:focus-vis
 
 <div id="pageLog">
 
-<div class="card" id="summaryCard">
- <div class="summary-label" id="summaryLabel">今日已記錄</div>
- <div class="summary-value"><span id="totalTime">0</span><small>分鐘</small></div>
- <div class="summary-track" id="timeTrack" aria-hidden="true"></div>
- <div class="summary-bottom"><span id="entryCount">0 筆事件</span><span id="summaryHint">從一件事情開始</span></div>
-</div>
 
 <!-- 輸入區 -->
 <div class="card" id="inputCard">
@@ -655,18 +643,6 @@ input:focus-visible,textarea:focus-visible,button:focus-visible,select:focus-vis
     $('listTitle').textContent = isToday ? '今日記錄' : viewDate + ' 的記錄';
     emptyMsg.textContent = isToday ? '尚無記錄，按「開始」記錄第一件事吧！' : '這一天沒有記錄';
     var list = todayEntries();
-    var total = list.reduce(function(sum,e){ return sum + Math.max(0,e.end-e.start); },0);
-    $('summaryLabel').textContent = isToday ? '今日已記錄' : viewDate + ' 已記錄';
-    $('totalTime').textContent = Math.round(total/60000).toLocaleString();
-    $('entryCount').textContent = list.length + ' 筆事件';
-    $('summaryHint').textContent = list.length ? '每一段時間，都有自己的位置' : '從一件事情開始';
-    var track = $('timeTrack'); track.innerHTML = '';
-    list.forEach(function(e,i){
-      var segment=document.createElement('span');
-      segment.style.width = (total ? Math.max(0,e.end-e.start)/total*100 : 0)+'%';
-      segment.style.background = ['var(--accent)','var(--green)','#7E90A2','#617EA0'][i%4];
-      track.appendChild(segment);
-    });
     emptyMsg.style.display = list.length ? 'none' : 'block';
     entryList.innerHTML = '';
     list.slice().reverse().forEach(function(e){
